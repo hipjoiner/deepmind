@@ -8,16 +8,12 @@ class Player:
         self.auto = auto
 
     def __repr__(self):
-        return 'Player %s' % self.name
+        return 'Player %d (%s)' % (self.id, self.name)
 
-    def actions(self, s):
-        if s.next_to_play != self.id:
-            return {}
-        return s.actions
-
-    def action(self, s):
-        if self.auto:
-            i = random.randrange(len(self.actions(s)))
-            return self.actions(s)[i]
-        spot = input('Player %s: %s; move? ' % (self.name, self.actions(s)))
-        return int(spot)
+    def policy(self, s):
+        if not self.auto:
+            spot = input('Player %s: %s; move? ' % (self.name, s.actions))
+            return int(spot)
+        # Simplest policy: choose at random from available actions
+        i = random.randrange(len(s.actions))
+        return s.actions[i]

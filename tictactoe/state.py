@@ -2,6 +2,8 @@ from functools import lru_cache
 import json
 import os
 
+from tictactoe import config
+
 """
     0|1|2
     -----
@@ -10,7 +12,24 @@ import os
     6|7|8
 """
 
-state_dir = 'C:/deepmind/tictactoe/states'
+"""
+Transition probability function:
+    What are s-prime states, and probability of each?
+
+State value function:  what is the value of this state?
+    Depends on policy function
+
+Action value function:  what is value of action a?
+    Depends on Player policy function, but only after action:
+        Take action a
+        Determine new state(s) s-prime
+        Use state value fn to evaluate values of s-prime states
+
+Player policy function:  what action should we take?
+
+"""
+
+state_dir = '%s/states' % config.home
 os.makedirs(state_dir, exist_ok=True)
 
 symbol = ('-', 'X', 'O')
@@ -47,24 +66,43 @@ class State(metaclass=Unique):
         self._terminal = None
         self._winner = -1       # For winner, None is a meaningful computed value, so use -1 to mean "not computed yet"
         # If cached in file, load additional data
-        if os.path.isfile(self.fpath()):
-            print('Found file cache')
+        if os.path.isfile(self.fpath):
+            print('Loading %s from file %s...\n' % (self.board, self.fpath))
             self.load()
         # In future we'll load more than just board state: saved value estimates, etc.
 
     def __repr__(self):
-        return '\n'.join([
+        """Also show actions, next_to_play, reward, terminal, winner
+        """
+        l1 = '%s   Actions: %s' % (
             '|'.join([' %s ' % symbol[i] for i in self.board[0:3]]),
+            self.actions
+        )
+        l2 = '%s   Next to play: %s' % (
             '-----------',
+            self.next_to_play
+        )
+        l3 = '%s   Reward: %s' % (
             '|'.join([' %s ' % symbol[i] for i in self.board[3:6]]),
+            self.reward
+        )
+        l4 = '%s   Terminal: %s' % (
             '-----------',
-            '|'.join([' %s ' % symbol[i] for i in self.board[6:9]])
-        ])
+            self.terminal
+        )
+        l5 = '%s   Winner: %s' % (
+            '|'.join([' %s ' % symbol[i] for i in self.board[6:9]]),
+            self.winner
+        )
+        return '\n'.join([l1, l2, l3, l4, l5])
 
     @property
     def actions(self):
         if self._actions is None:
-            self._actions = [i for i in range(len(self.board)) if self.board[i] == 0]
+            if self.terminal:
+                self._actions = []
+            else:
+                self._actions = [i for i in range(len(self.board)) if self.board[i] == 0]
         return self._actions
 
     @actions.setter
@@ -89,6 +127,7 @@ class State(metaclass=Unique):
     def brief(self):
         return '|'.join([symbol[i] for i in self.board])
 
+    @property
     @lru_cache()
     def fpath(self):
         fname = ''.join([symbol[i] for i in self.board])
@@ -96,8 +135,7 @@ class State(metaclass=Unique):
         return fpath
 
     def load(self):
-        print('Loading %s...' % str(self.board))
-        with open(self.fpath()) as fp:
+        with open(self.fpath) as fp:
             data = json.load(fp)
         self.actions = data.get('actions', None)
         self.board = data.get('board', None)
@@ -152,7 +190,7 @@ class State(metaclass=Unique):
             'terminal': self.terminal,
             'winner': self.winner,
         }
-        with open(self.fpath(), 'w') as fp:
+        with open(self.fpath, 'w') as fp:
             json.dump(data, fp, indent=4)
 
     @property
