@@ -10,6 +10,9 @@ import os
     6|7|8
 """
 
+state_dir = 'C:/deepmind/tictactoe/states'
+os.makedirs(state_dir, exist_ok=True)
+
 symbol = ('-', 'X', 'O')
 
 winners = (
@@ -23,43 +26,31 @@ winners = (
     {2, 4, 6},
 )
 
-state_dir = 'D:/deepmind/tictactoe/states'
-os.makedirs(state_dir, exist_ok=True)
 
-
-class State:
+class Unique(type):
     cache = {}
 
-    @staticmethod
-    def get(board=(0, 0, 0, 0, 0, 0, 0, 0, 0)):
-        if board not in State.cache:
-            if State.loadable(board):
-                board = State.load(board)
-            State.cache[board] = State(board)
-        return State.cache[board]
+    def __call__(cls, board=(0, 0, 0, 0, 0, 0, 0, 0, 0)):
+        if board not in cls.cache:
+            cls.cache[board] = type.__call__(cls, board)
+        else:
+            print('Found in cache')
+        return cls.cache[board]
 
-    @staticmethod
-    @lru_cache()
-    def fpath(board):
-        fname = ''.join([symbol[i] for i in board])
-        fpath = '%s/%s.json' % (state_dir, fname)
-        return fpath
 
-    @staticmethod
-    def load(board):
-        print('Loading %s...' % str(board))
-        with open(State.fpath(board)) as fp:
-            data = json.load(fp)
+class State(metaclass=Unique):
+    def __init__(self, board=(0, 0, 0, 0, 0, 0, 0, 0, 0)):
+        self._board = board
+        self._actions = None
+        self._next_to_play = None
+        self._reward = None
+        self._terminal = None
+        self._winner = -1       # For winner, None is a meaningful computed value, so use -1 to mean "not computed yet"
+        # If cached in file, load additional data
+        if os.path.isfile(self.fpath()):
+            print('Found file cache')
+            self.load()
         # In future we'll load more than just board state: saved value estimates, etc.
-        b = tuple(data['board'])
-        return b
-
-    @staticmethod
-    def loadable(board):
-        return os.path.isfile(State.fpath(board))
-
-    def __init__(self, board):
-        self.board = board
 
     def __repr__(self):
         return '\n'.join([
@@ -70,59 +61,128 @@ class State:
             '|'.join([' %s ' % symbol[i] for i in self.board[6:9]])
         ])
 
-    def actions(self, p):
-        if self.next_to_play() != p:
-            return {}
-        return [i for i in range(len(self.board)) if self.board[i] == 0]
+    @property
+    def actions(self):
+        if self._actions is None:
+            self._actions = [i for i in range(len(self.board)) if self.board[i] == 0]
+        return self._actions
+
+    @actions.setter
+    def actions(self, val):
+        self._actions = val
 
     def apply_action(self, p, a):
-        if a not in self.actions(p):
+        if a not in self.actions:
             raise ValueError('Illegal action %d by %s' % (a, p))
         b = list(self.board)
         b[a] = p
-        return State.get(tuple(b))
+        return State(tuple(b))
+
+    @property
+    def board(self):
+        return self._board
+
+    @board.setter
+    def board(self, val):
+        self._board = val
 
     def brief(self):
         return '|'.join([symbol[i] for i in self.board])
 
+    @lru_cache()
+    def fpath(self):
+        fname = ''.join([symbol[i] for i in self.board])
+        fpath = '%s/%s.json' % (state_dir, fname)
+        return fpath
+
+    def load(self):
+        print('Loading %s...' % str(self.board))
+        with open(self.fpath()) as fp:
+            data = json.load(fp)
+        self.actions = data.get('actions', None)
+        self.board = data.get('board', None)
+        self.next_to_play = data.get('next_to_play', None)
+        self.reward = data.get('reward', None)
+        self.terminal = data.get('terminal', None)
+        self.winner = data.get('winner', -1)
+
+    @property
     def next_to_play(self):
-        if self.terminal():
-            return 0
-        p1 = self.position(1)
-        p2 = self.position(2)
-        if len(p1) <= len(p2):
-            return 1
-        return 2
+        if self._next_to_play is None:
+            if self.terminal:
+                self._next_to_play = 0
+            else:
+                p1 = self.position(1)
+                p2 = self.position(2)
+                if len(p1) <= len(p2):
+                    self._next_to_play = 1
+                else:
+                    self._next_to_play = 2
+        return self._next_to_play
+
+    @next_to_play.setter
+    def next_to_play(self, val):
+        self._next_to_play = val
 
     def position(self, p):
         return {i for i in range(len(self.board)) if self.board[i] == p}
 
+    @property
     def reward(self):
         """Array of rewards by player"""
-        w = self.winner()
-        if not w:
-            return [0, 0]
-        if w == 1:
-            return [1, -1]
-        return [-1, 1]
+        if self._reward is None:
+            if not self.winner:
+                self._reward = [0, 0]
+            elif self.winner == 1:
+                self._reward = [1, -1]
+            else:
+                self._reward = [-1, 1]
+        return self._reward
+
+    @reward.setter
+    def reward(self, val):
+        self._reward = val
 
     def save(self):
         data = {
-            'board': self.board
+            'board': self.board,
+            'next_to_play': self.next_to_play,
+            'actions': self.actions,
+            'reward': self.reward,
+            'terminal': self.terminal,
+            'winner': self.winner,
         }
-        with open(State.fpath(self.board), 'w') as fp:
-            json.dump(data, fp)
+        with open(self.fpath(), 'w') as fp:
+            json.dump(data, fp, indent=4)
 
+    @property
     def terminal(self):
-        return self.winner() is not None
+        if self._terminal is None:
+            self._terminal = self.winner is not None
+        return self._terminal
 
-    @lru_cache()
+    @terminal.setter
+    def terminal(self, val):
+        self._terminal = val
+
+    @property
     def winner(self):
-        for p in [1, 2]:
-            pos = self.position(p)
-            for w in winners:
-                if w.issubset(pos):
-                    return p
-        if 0 not in self.board:
-            return 0
-        return None
+        if self._winner == -1:
+            for player in [1, 2]:
+                pos = self.position(player)
+                for w in winners:
+                    if w.issubset(pos):
+                        self._winner = player
+                        break
+                if self._winner:
+                    break
+            if self._winner == -1:
+                if 0 not in self.board:
+                    self._winner = 0
+                else:
+                    self._winner = None
+        return self._winner
+
+    @winner.setter
+    def winner(self, val):
+        self._winner = val

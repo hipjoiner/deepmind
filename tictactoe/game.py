@@ -11,18 +11,17 @@ class Game:
         ]
 
     def play(self):
-        state = State.get()
+        state = State()
         print(state)
-        while not state.terminal():
-            p = state.next_to_play()
+        while not state.terminal:
+            p = state.next_to_play
             player = self.players[p - 1]
             a = player.action(state)
             print('%s chooses %d\n' % (player, a))
             state = state.apply_action(p, a)
             print(state)
-        p = state.winner()
-        if p:
-            print('%s wins.' % self.players[p - 1])
+        if state.winner:
+            print('%s wins.' % self.players[state.winner - 1])
         else:
             print('Draw.')
 

@@ -11,7 +11,9 @@ class Player:
         return 'Player %s' % self.name
 
     def actions(self, s):
-        return s.actions(self.id)
+        if s.next_to_play != self.id:
+            return {}
+        return s.actions
 
     def action(self, s):
         if self.auto:
