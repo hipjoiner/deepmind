@@ -14,7 +14,8 @@ from tictactoe import config
 
 """
 Transition probability function:
-    What are s-prime states, and probability of each?
+    What are s-prime states
+    What probability of each s-prime?
 
 State value function:  what is the value of this state?
     Depends on policy function
@@ -26,7 +27,6 @@ Action value function:  what is value of action a?
         Use state value fn to evaluate values of s-prime states
 
 Player policy function:  what action should we take?
-
 """
 
 state_dir = '%s/states' % config.home
@@ -52,8 +52,9 @@ class Unique(type):
     def __call__(cls, board=(0, 0, 0, 0, 0, 0, 0, 0, 0)):
         if board not in cls.cache:
             cls.cache[board] = type.__call__(cls, board)
-        else:
-            print('Found in cache')
+            # print('Added to cache: %s' % str(board))
+        # else:
+            # print('Found in cache: %s' % str(board))
         return cls.cache[board]
 
 
@@ -62,21 +63,23 @@ class State(metaclass=Unique):
         self._board = board
         self._actions = None
         self._next_to_play = None
-        self._reward = None
+        self._rewards = None
         self._terminal = None
+        self._transitions = None
         self._winner = -1       # For winner, None is a meaningful computed value, so use -1 to mean "not computed yet"
         # If cached in file, load additional data
         if os.path.isfile(self.fpath):
-            print('Loading %s from file %s...\n' % (self.board, self.fpath))
+            # print('Loading %s from file %s...\n' % (self.board, self.fpath))
             self.load()
         # In future we'll load more than just board state: saved value estimates, etc.
 
     def __repr__(self):
         """Also show actions, next_to_play, reward, terminal, winner
         """
-        l1 = '%s   Actions: %s' % (
+        l1 = '%s   Actions: %s  Values: %s' % (
             '|'.join([' %s ' % symbol[i] for i in self.board[0:3]]),
-            self.actions
+            self.actions,
+            self.action_values
         )
         l2 = '%s   Next to play: %s' % (
             '-----------',
@@ -84,7 +87,7 @@ class State(metaclass=Unique):
         )
         l3 = '%s   Reward: %s' % (
             '|'.join([' %s ' % symbol[i] for i in self.board[3:6]]),
-            self.reward
+            self.rewards
         )
         l4 = '%s   Terminal: %s' % (
             '-----------',
@@ -95,6 +98,13 @@ class State(metaclass=Unique):
             self.winner
         )
         return '\n'.join([l1, l2, l3, l4, l5])
+
+    def action_value(self, a):
+        return self.transitions[a].state_value(self.next_to_play)
+
+    @property
+    def action_values(self):
+        return [self.transitions[a].state_value(self.next_to_play) for a in self.actions]
 
     @property
     def actions(self):
@@ -140,7 +150,7 @@ class State(metaclass=Unique):
         self.actions = data.get('actions', None)
         self.board = data.get('board', None)
         self.next_to_play = data.get('next_to_play', None)
-        self.reward = data.get('reward', None)
+        self.rewards = data.get('rewards', None)
         self.terminal = data.get('terminal', None)
         self.winner = data.get('winner', -1)
 
@@ -165,33 +175,41 @@ class State(metaclass=Unique):
     def position(self, p):
         return {i for i in range(len(self.board)) if self.board[i] == p}
 
-    @property
-    def reward(self):
-        """Array of rewards by player"""
-        if self._reward is None:
-            if not self.winner:
-                self._reward = [0, 0]
-            elif self.winner == 1:
-                self._reward = [1, -1]
-            else:
-                self._reward = [-1, 1]
-        return self._reward
+    def reward(self, player=None):
+        if not self.terminal or not player:
+            return 0
+        return self.rewards[player - 1]
 
-    @reward.setter
-    def reward(self, val):
-        self._reward = val
+    @property
+    def rewards(self):
+        """Array of rewards by player"""
+        if self._rewards is None:
+            if not self.winner:
+                self._rewards = [0, 0]
+            elif self.winner == 1:
+                self._rewards = [1, -1]
+            else:
+                self._rewards = [-1, 1]
+        return self._rewards
+
+    @rewards.setter
+    def rewards(self, val):
+        self._rewards = val
 
     def save(self):
         data = {
             'board': self.board,
             'next_to_play': self.next_to_play,
             'actions': self.actions,
-            'reward': self.reward,
+            'rewards': self.rewards,
             'terminal': self.terminal,
             'winner': self.winner,
         }
         with open(self.fpath, 'w') as fp:
             json.dump(data, fp, indent=4)
+
+    def state_value(self, player):
+        return self.reward(player)
 
     @property
     def terminal(self):
@@ -202,6 +220,19 @@ class State(metaclass=Unique):
     @terminal.setter
     def terminal(self, val):
         self._terminal = val
+
+    @property
+    def transitions(self):
+        if self._transitions is None:
+            if not self.next_to_play:
+                self._transitions = {}
+            else:
+                self._transitions = {a: self.apply_action(self.next_to_play, a) for a in self.actions}
+        return self._transitions
+
+    @transitions.setter
+    def transitions(self, val):
+        self._transitions = val
 
     @property
     def winner(self):

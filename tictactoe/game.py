@@ -30,7 +30,5 @@ if __name__ == '__main__':
     game = Game()
     game.play()
 
-    print('\nPassed thru these states:')
     for t, s in State.cache.items():
-        print(s.brief())
         s.save()
