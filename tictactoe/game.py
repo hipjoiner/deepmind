@@ -5,9 +5,8 @@ from tictactoe.state import State
 class Game:
     def __init__(self):
         self.players = [
-            Player(1, name='X', auto=True),
-            # Player(2, name='O')
-            Player(2, name='O', auto=True)
+            Player(0, 'X', auto=True),
+            Player(1, 'O', auto=True)
         ]
 
     def play(self):
@@ -18,7 +17,7 @@ class Game:
             player = self.players[p - 1]
             a = player.policy(state)
             print('%s action: %d\n' % (player, a))
-            state = state.apply_action(p, a)
+            state = state.apply_action(a)
             print(state, '\n')
         if state.winner:
             print('%s wins.' % self.players[state.winner - 1])
