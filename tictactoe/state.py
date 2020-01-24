@@ -41,8 +41,10 @@ class Unique(type):
 class State(metaclass=Unique):
     def __init__(self, board=(0, 0, 0, 0, 0, 0, 0, 0, 0)):
         self.board = board
+        self.data = {'board': board}
         if os.path.isfile(self.fpath):
-            self.load()
+            with open(self.fpath) as fp:
+                self.data = json.load(fp)
 
     def __repr__(self):
         """Show board, actions, next_to_play, reward, terminal, winner"""
@@ -67,6 +69,9 @@ class State(metaclass=Unique):
             self.next_to_play
         )
         return '\n'.join([l1, l2, l3, l4, l5])
+
+    def action_values(self, policy):
+        return [self.transitions[a].state_value(policy) for a in self.actions]
 
     @property
     @lru_cache()
@@ -93,9 +98,12 @@ class State(metaclass=Unique):
         fpath = '%s/%s.json' % (state_dir, fname)
         return fpath
 
-    def load(self):
-        with open(self.fpath) as fp:
-            data = json.load(fp)
+    @property
+    @lru_cache()
+    def last_to_play(self):
+        if len(self.position(1)) == 0 and len(self.position(2)) == 0:
+            return None
+        return 2 - (len(self.position(1)) - len(self.position(2)))
 
     @property
     @lru_cache()
@@ -114,7 +122,7 @@ class State(metaclass=Unique):
     @property
     @lru_cache()
     def reward(self):
-        """Array of rewards by player"""
+        """List of rewards indexed by player"""
         if not self.winner:
             return [0, 0]
         if self.winner == 1:
@@ -124,6 +132,7 @@ class State(metaclass=Unique):
     def save(self):
         data = {
             'board': self.board,
+            'last_to_play': self.last_to_play,
             'next_to_play': self.next_to_play,
             'actions': self.actions,
             'reward': self.reward,
@@ -133,6 +142,12 @@ class State(metaclass=Unique):
         with open(self.fpath, 'w') as fp:
             json.dump(data, fp, indent=4)
 
+    def state_value(self, policy):
+        # Naive starting state value is just reward for reaching this state
+        v = self.reward
+        return v
+        # How do we iteratively improve this value?
+
     @property
     @lru_cache()
     def terminal(self):
@@ -141,7 +156,8 @@ class State(metaclass=Unique):
     @property
     @lru_cache()
     def transitions(self):
-        return {a: self.apply_action(self.next_to_play, a) for a in self.actions}
+        """Return list of new states reached corresponding to actions in self.actions"""
+        return [self.apply_action(a) for a in self.actions]
 
     @property
     @lru_cache()
