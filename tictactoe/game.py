@@ -1,29 +1,39 @@
-from tictactoe.player import Player
 from tictactoe.state import State
 
 
-def play():
-    players = [
-        "dummy",    # Player indexing starts with 1
-        Player(0, 'X', auto=True),
-        Player(1, 'O', auto=True)
-    ]
+class Player:
+    def __init__(self, symbol, auto=True):
+        self.symbol = symbol
+        self.auto = auto
+
+
+def play(players):
     state = State()
-    print(state, '\n')
+    state.revise()
+    print(state)
     while not state.terminal:
         player = players[state.next_to_play]
-        a = player.action(state)
-        print('%s action: %d\n' % (player, a))
+        if not player.auto:
+            a = int(input('%s move? ' % player.symbol))
+        else:
+            a = state.action()
+            print('%s action: %d\n' % (player.symbol, a))
         state = state.apply_action(a)
-        print(state, '\n')
-    if state.winner:
-        print('%s wins.' % players[state.winner])
+        state.revise()
+        print(state)
+    if state.winner is not None:
+        print('%s wins.' % players[state.winner].symbol)
     else:
         print('Draw.')
 
 
 if __name__ == '__main__':
-    play()
-
-    for t, s in State.cache.items():
-        s.save()
+    trials = 10000
+    State.explore_factor = 0.1
+    players = [
+        Player('X', auto=True),
+        Player('O', auto=True),
+    ]
+    for i in range(trials):
+        print('\nTrial #%d\n' % (i + 1))
+        play(players)
