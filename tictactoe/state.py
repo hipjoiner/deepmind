@@ -56,31 +56,30 @@ class State(metaclass=Unique):
 
     def __repr__(self):
         """Show board, actions, next_to_play, reward, terminal, winner"""
-        l1 = '%s   Terminal: %s | Next: %s | Winner: %s | Reward: %s' % (
-            '|'.join([' %s ' % self.symbol(i) for i in self.board[0:3]]),
-            self.terminal,
-            self.next_to_play,
-            self.symbol(self.winner),
-            self.reward,
-        )
-        l2 = '%s   Actions: %s' % (
-            '-----------',
-            self.actions,
-        )
-        l3 = '%s   Policy: %s' % (
-            '|'.join([' %s ' % self.symbol(i) for i in self.board[3:6]]),
-            self.policy,
-        )
-        l4 = '%s   Values: %s' % (
-            '-----------',
-            self.next_values,
-        )
-        l5 = '%s   Value: %f | Revisions: %d' % (
-            '|'.join([' %s ' % self.symbol(i) for i in self.board[6:9]]),
-            self.value,
-            self.revisions,
-        )
-        return '\n'.join([l1, l2, l3, l4, l5, ''])
+        return '\n'.join([
+            '%s   %s to play' % (
+                '|'.join([' %s ' % self.symbol(i) for i in self.board[0:3]]),
+                self.symbol(self.next_to_play),
+            ),
+            '%s   Actions: %s' % (
+                '-----------',
+                self.actions,
+            ),
+            '%s   Values: %s' % (
+                '|'.join([' %s ' % self.symbol(i) for i in self.board[3:6]]),
+                self.next_values,
+            ),
+            '%s   Policy: %s' % (
+                '-----------',
+                self.policy,
+            ),
+            '%s   Value: %s | Revisions: %d' % (
+                '|'.join([' %s ' % self.symbol(i) for i in self.board[6:9]]),
+                self.value,
+                self.revisions,
+            ),
+            ''
+        ])
 
     def action(self):
         """Choose and return action a"""
@@ -139,7 +138,8 @@ class State(metaclass=Unique):
 
     @property
     def next_values(self):
-        return [self.next_states[i].value for i in range(len(self.next_states))]
+        vals = [self.next_states[i].value for i in range(len(self.next_states))]
+        return vals
 
     @property
     @lru_cache()
@@ -175,39 +175,62 @@ class State(metaclass=Unique):
         self.revisions += 1
         self.save()
 
-    def revise_policy(self):
-        # FIXME: How we change policy probabilities appears to be extremely important to how
-        # states are explored.  Look more carefully at these values, and algorithm for revising them.
+    @property
+    def greedy_policy(self):
+        vals = [val[self.next_to_play] for val in self.next_values]
+        max_val = max(vals)
+        greedy = [1 if val == max_val else 0 for val in vals]
+        max_count = sum(greedy)
+        greedy = [val / max_count for val in greedy]
+        return greedy
+
+    @property
+    def weighted_policy(self):
         calc = [(v + 1) ** math.sqrt(self.revisions + 1) for v in self.next_values]
         norm = sum(calc)
         if norm == 0:
             return
-        rev = [calc[i] / norm for i in range(len(calc))]
-        uni = self.uniform_policy
-        for i in range(len(self.policy)):
-            rev[i] = rev[i] * (1 - State.explore_factor) + uni[i] * State.explore_factor
-        if min(rev) < 0:
-            raise ValueError('Neative policy value: %s' % rev)
-        if max(rev) > 1:
-            raise ValueError('Policy value > 1: %s' % rev)
-        if abs(sum(rev) - 1.0) > 1e-4:
-            raise ValueError('Policy values don\'t add to 1: %s' % rev)
-        self.policy = rev
+        weighted = [calc[i] / norm for i in range(len(calc))]
+        return weighted
+
+    @property
+    @lru_cache()
+    def uniform_policy(self):
+        if not self.actions:
+            return []
+        uniform = [1 / len(self.actions)] * len(self.actions)
+        return uniform
+
+    def revise_policy(self):
+        # FIXME: How we change policy probabilities appears to be extremely important to how
+        # states are explored.  Look more carefully at these values, and algorithm for revising them.
+        greedy = self.greedy_policy
+        uniform = self.uniform_policy
+        revised = [
+            greedy[i] * (1 - State.explore_factor) + uniform[i] * State.explore_factor for i in range(len(self.policy))
+        ]
+        if min(revised) < 0:
+            raise ValueError('Neative policy value: %s' % revised)
+        if max(revised) > 1:
+            raise ValueError('Policy value > 1: %s' % revised)
+        if abs(sum(revised) - 1.0) > 1e-4:
+            raise ValueError('Policy values don\'t add to 1: %s' % revised)
+        self.policy = revised
 
     def revise_value(self):
-        # Next values will be from perspective of next to play.
-        # Value for this state should be from perspective of last to play:  player who can take action
-        # to enter this state.  That value is the inverse of that for next to play player.
-        val = sum([self.policy[i] * self.next_values[i] for i in range(len(self.policy))])
-        self._value = -val
+        nv = self.next_values
+        val = sum([self.policy[i] * nv[i][0] for i in range(len(self.policy))])
+        self.value = [val, -val]
 
     @property
     @lru_cache()
     def reward(self):
         """Scalar value, from point of view of last to play"""
         if self.winner is not None:
-            return 1
-        return 0
+            if self.winner == 0:
+                return [1, -1]
+            return [-1, 1]
+        return [0, 0]
 
     def save(self):
         data = {
@@ -215,6 +238,7 @@ class State(metaclass=Unique):
             'board': self.board,
             'last_to_play': self.last_to_play,
             'next_to_play': self.next_to_play,
+            'next_values': self.next_values,
             'policy': self.policy,
             'revisions': self.revisions,
             'reward': self.reward,
@@ -239,18 +263,14 @@ class State(metaclass=Unique):
         return self.plays == 9
 
     @property
-    @lru_cache()
-    def uniform_policy(self):
-        if not self.actions:
-            return []
-        uni = [1 / len(self.actions)] * len(self.actions)
-        return uni
-
-    @property
     def value(self):
         if self._value is None:
             self._value = self.reward
         return self._value
+
+    @value.setter
+    def value(self, val):
+        self._value = val
 
     @property
     @lru_cache()
