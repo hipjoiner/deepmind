@@ -1,3 +1,14 @@
+"""
+Game play versus training is messy here.  Create separate entry points or options to cover:
+
+    Training (specify number of rounds or time to train)
+    Play vs machine (specify human player)
+
+    Later option for either training or human play could specify starting state (default to standard game start)
+
+    Clear training data
+
+"""
 from tictactoe.state import State
 
 

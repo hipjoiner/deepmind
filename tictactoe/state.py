@@ -1,3 +1,15 @@
+"""
+State class for tic tac toe.
+Loose ends:
+
+    exploration factor implementation is very kludgy
+    no discount factor capability yet
+    game play vs. game training is also kludgy; clean up
+    this effectively uses a 1-step lookahead algorithm (TD0?)
+        how to extend to use n-step-- TD-lambda(?) ?
+        see David Silver's lecture 6 on value function approximation & gradient descent
+
+"""
 from functools import lru_cache
 import json
 import math
@@ -83,12 +95,11 @@ class State(metaclass=Unique):
 
     def action(self):
         """Choose and return action a"""
-        p = self.policy
-        if not p:
+        if not self.policy:
             return None
         rnd = random.uniform(0, 1)
         cdf = 0
-        for i, prob in enumerate(p):
+        for i, prob in enumerate(self.policy):
             cdf += prob
             if rnd <= cdf:
                 return self.actions[i]
@@ -138,7 +149,8 @@ class State(metaclass=Unique):
 
     @property
     def next_values(self):
-        vals = [self.next_states[i].value for i in range(len(self.next_states))]
+        # vals = [self.next_states[i].value for i in range(len(self.next_states))]
+        vals = [s.value for s in self.next_states]
         return vals
 
     @property
@@ -202,8 +214,6 @@ class State(metaclass=Unique):
         return uniform
 
     def revise_policy(self):
-        # FIXME: How we change policy probabilities appears to be extremely important to how
-        # states are explored.  Look more carefully at these values, and algorithm for revising them.
         greedy = self.greedy_policy
         uniform = self.uniform_policy
         revised = [
@@ -225,7 +235,7 @@ class State(metaclass=Unique):
     @property
     @lru_cache()
     def reward(self):
-        """Scalar value, from point of view of last to play"""
+        """Array of scalar values, one for each player"""
         if self.winner is not None:
             if self.winner == 0:
                 return [1, -1]
@@ -251,6 +261,7 @@ class State(metaclass=Unique):
 
     @staticmethod
     def symbol(p):
+        """One-character symbol for player p"""
         if p is None:
             return '-'
         return ['X', 'O'][p]
@@ -258,23 +269,30 @@ class State(metaclass=Unique):
     @property
     @lru_cache()
     def terminal(self):
+        """Is this an end state"""
         if self.winner is not None:
             return True
         return self.plays == 9
 
     @property
     def value(self):
+        """Array of scalar values, one for each player"""
         if self._value is None:
             self._value = self.reward
         return self._value
 
     @value.setter
     def value(self, val):
+        """Array of scalar values, one for each player"""
         self._value = val
 
     @property
     @lru_cache()
     def winner(self):
+        """Winner of the game, if there is one:
+            0 or 1      Player that won
+            None        Draw, or game not over (distinguish between these by checking self.terminal)
+        """
         for player in [0, 1]:
             pos = self.position(player)
             for w in winners:
