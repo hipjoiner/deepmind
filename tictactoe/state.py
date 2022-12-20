@@ -16,7 +16,7 @@ import math
 import os
 import random
 
-from tictactoe import config
+from config import deepmind_home
 
 """
     0|1|2
@@ -26,8 +26,6 @@ from tictactoe import config
     6|7|8
 """
 
-state_dir = '%s/states' % config.home
-os.makedirs(state_dir, exist_ok=True)
 
 winners = (
     {0, 1, 2},
@@ -123,8 +121,9 @@ class State(metaclass=Unique):
     @property
     @lru_cache()
     def fpath(self):
+        state_dir = '%s/states' % deepmind_home
         fname = ''.join([self.symbol(i) for i in self.board])
-        fpath = '%s/%s.json' % (state_dir, fname)
+        fpath = f'%s/%s.json' % (state_dir, fname)
         return fpath
 
     @property
@@ -243,6 +242,7 @@ class State(metaclass=Unique):
         return [0, 0]
 
     def save(self):
+        os.makedirs(os.path.dirname(self.fpath), exist_ok=True)
         data = {
             'actions': self.actions,
             'board': self.board,
