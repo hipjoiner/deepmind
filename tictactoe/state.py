@@ -49,9 +49,8 @@ class State(metaclass=CachedInstance):
         if self.board is None:
             self.board = tuple([self.no_one] * 9)
         self.explore_factor = explore_factor
-        self.fpath = f"{deepmind_home}/states/{''.join([p.symbol for p in self.board])}.json"
-        self.policy_pdf = self.policy_pdf_uniform
-        self.values = self.rewards
+        self._policy_pdf = None
+        self._values = None
         self.revisions = 0
         self.load_from_cache()
 
@@ -96,17 +95,23 @@ class State(metaclass=CachedInstance):
         ])
 
     @cached_property
+    def fpath(self):
+        return f"{deepmind_home}/states/{''.join([p.symbol for p in self.board])}.json"
+
+    @cached_property
     def game_over(self):
         """Is this an end state"""
-        if self.who_won != self.no_one:
-            return True
-        return self.total_play_count == 9
+        return self.who_won != self.no_one or self.total_play_count == 9
 
     def load_from_cache(self):
         if not os.path.isfile(self.fpath):
             return
-        with open(self.fpath) as fp:
-            data = json.load(fp)
+        try:
+            with open(self.fpath) as fp:
+                data = json.load(fp)
+        except json.decoder.JSONDecodeError:
+            os.remove(self.fpath)
+            data = {}
         self.policy_pdf = data.get('policy', self.policy_pdf_uniform)
         self.values = data.get('value', self.rewards)
         self.revisions = data.get('revisions', 0)
@@ -121,7 +126,7 @@ class State(metaclass=CachedInstance):
         """Array of legal plays remaining"""
         if self.game_over:
             return []
-        return [i for i in range(len(self.board)) if self.board[i] == self.no_one]
+        return [spot for spot in range(len(self.board)) if self.board[spot] == self.no_one]
 
     @property
     def next_state_values(self):
@@ -143,6 +148,16 @@ class State(metaclass=CachedInstance):
             player is an integer
         """
         return {i for i in range(len(self.board)) if self.board[i] == player}
+
+    @property
+    def policy_pdf(self):
+        if self._policy_pdf is None:
+            self._policy_pdf = self.policy_pdf_uniform
+        return self._policy_pdf
+
+    @policy_pdf.setter
+    def policy_pdf(self, new_policy_pdf):
+        self._policy_pdf = new_policy_pdf
 
     @property
     def policy_pdf_greedy(self):
@@ -233,6 +248,16 @@ class State(metaclass=CachedInstance):
         """Return total number of plays made up to this state"""
         # return len(self.player_position(0)) + len(self.player_position(1))
         return sum([len(self.player_position(player)) for player in self.players])
+
+    @property
+    def values(self):
+        if self._values is None:
+            self._values = self.rewards
+        return self._values
+
+    @values.setter
+    def values(self, new_values):
+        self._values = new_values
 
     @cached_property
     def who_played_last(self):
