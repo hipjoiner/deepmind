@@ -14,30 +14,29 @@ from player import Player
 from state import State
 
 
-def play(players):
-    state = State()
+def run_trial(players, explore_factor):
+    state = State(explore_factor=explore_factor)
     state.revise()
-    while not state.terminal:
-        player = players[state.next_to_play]
+    while not state.game_over:
+        player = players[state.who_plays_next]
         if not player.auto:
-            a = int(input('%s move? ' % player.symbol))
+            play = int(input('%s move? ' % player.symbol))
         else:
-            a = state.action()
-        state = state.apply_action(a)
+            play = state.choose_play()
+        state = state.apply_play(play)
         state.revise()
-    return state.winner
+    return state.who_won
 
 
 if __name__ == '__main__':
     trials = 10000
-    State.explore_factor = 0.0
     players = [
         Player('X', number=0, auto=True),
         Player('O', number=1, auto=True),
     ]
     wins = [0, 0]
     for t in range(1, trials + 1):
-        winner = play(players)
+        winner = run_trial(players, explore_factor=0.0)
         if winner is not None:
             wins[winner] += 1
         if t % 200 == 0:
