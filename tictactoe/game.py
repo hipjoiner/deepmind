@@ -7,37 +7,42 @@ Game play versus training is messy here.  Create separate entry points or option
     Later option for either training or human play could specify starting state (default to standard game start)
 
     Clear training data
-
 """
 from config import log
 from player import Player
 from state import State
 
 
-def run_trial(players, explore_factor):
-    state = State(explore_factor=explore_factor)
+def run_trial(player1, player2, starting_state):
+    players = [
+        player1,
+        player2
+    ]
+    state = starting_state
     state.revise()
     while not state.game_over:
-        player = players[state.who_plays_next]
-        if not player.auto:
-            play = int(input('%s move? ' % player.symbol))
-        else:
+        player = state.who_plays_next
+        if player.auto:
             play = state.choose_play()
-        state = state.apply_play(play)
+        else:
+            play = int(input('%s move? ' % player.symbol))
+        state = state.next_state_from_play(play)
         state.revise()
-    return state.who_won
+    return state
+
+
+def run_many(trials):
+    p1 = Player('X', number=0, auto=True)
+    p2 = Player('O', number=1, auto=True)
+    s0 = State(p1, p2, explore_factor=0.0)
+    wins = [0, 0]
+    for t in range(1, trials + 1):
+        state = run_trial(p1, p2, s0)
+        if state.who_won is not state.no_one:
+            wins[state.who_won.number] += 1
+        if t % 200 == 0:
+            log('%d trials:  %d X wins, %d O wins, %d draws.' % (t, wins[0], wins[1], t - (wins[0] + wins[1])))
 
 
 if __name__ == '__main__':
-    trials = 10000
-    players = [
-        Player('X', number=0, auto=True),
-        Player('O', number=1, auto=True),
-    ]
-    wins = [0, 0]
-    for t in range(1, trials + 1):
-        winner = run_trial(players, explore_factor=0.0)
-        if winner is not None:
-            wins[winner] += 1
-        if t % 200 == 0:
-            log('%d trials:  %d X wins, %d O wins, %d draws.' % (t, wins[0], wins[1], t - (wins[0] + wins[1])))
+    run_many(10000)
