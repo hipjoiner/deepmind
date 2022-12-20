@@ -13,11 +13,7 @@ from player import Player
 from state import State
 
 
-def run_trial(player1, player2, starting_state):
-    players = [
-        player1,
-        player2
-    ]
+def run_trial(starting_state):
     state = starting_state
     state.revise()
     while not state.game_over:
@@ -25,7 +21,7 @@ def run_trial(player1, player2, starting_state):
         if player.auto:
             play = state.choose_play()
         else:
-            play = int(input('%s move? ' % player.symbol))
+            play = int(input(f'{player.symbol} move? '))
         state = state.next_state_from_play(play)
         state.revise()
     return state
@@ -37,7 +33,7 @@ def run_many(trials):
     s0 = State(p1, p2, explore_factor=0.0)
     wins = [0, 0]
     for t in range(1, trials + 1):
-        state = run_trial(p1, p2, s0)
+        state = run_trial(s0)
         if state.who_won is not state.no_one:
             wins[state.who_won.number] += 1
         if t % 200 == 0:
