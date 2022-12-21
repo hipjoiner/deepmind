@@ -1,12 +1,4 @@
 """
-Game play versus training is messy here.  Create separate entry points or options to cover:
-
-    Training (specify number of rounds or time to train)
-    Play vs machine (specify human player)
-
-    Later option for either training or human play could specify starting state (default to standard game start)
-
-    Clear training data
 """
 from config import log
 from state import State
@@ -26,12 +18,17 @@ def run_trial(starting_state):
     return state
 
 
-def run_many(trials, explore_factor):
-    s0 = State(cash=10000, shares=0)
+def run_many(trials):
+    info = 1
+    s0 = State(info)
+    wins = [0, 0]
     for t in range(1, trials + 1):
         state = run_trial(s0)
-        log('Trial {t}: ending value {state.total_value}')
+        if state.who_won is not state.no_one:
+            wins[state.who_won.number] += 1
+        if t % 200 == 0:
+            log('%d trials:  %d X wins, %d O wins, %d draws.' % (t, wins[0], wins[1], t - (wins[0] + wins[1])))
 
 
 if __name__ == '__main__':
-    run_many(30000, explore_factor=0.5)
+    run_many(30000)
