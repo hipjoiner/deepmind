@@ -180,7 +180,7 @@ class State(metaclass=CachedInstance):
     @property
     def policy_pdf_weighted(self):
         """Don't think I'm using this one currently. ???"""
-        calc = [(1 + v) ** math.sqrt(self.revisions + 1) for v in self.next_state_values]
+        calc = [(v + 1) ** math.sqrt(self.revisions + 1) for v in self.next_state_values]
         norm = sum(calc)
         if norm == 0:
             return
@@ -202,11 +202,11 @@ class State(metaclass=CachedInstance):
             greedy[i] * (1 - self.explore_factor) + uniform[i] * self.explore_factor for i in range(len(self.policy_pdf))
         ]
         if min(revised) < 0:
-            raise ValueError(f'Negative policy value: {revised}')
+            raise ValueError('Neative policy value: %s' % revised)
         if max(revised) > 1:
-            raise ValueError(f'Policy value > 1: {revised}' % revised)
+            raise ValueError('Policy value > 1: %s' % revised)
         if abs(sum(revised) - 1.0) > 1e-4:
-            raise ValueError(f"Policy values don't add to 1: {revised}")
+            raise ValueError('Policy values don\'t add to 1: %s' % revised)
         self.policy_pdf = revised
 
     def revise_values(self):

@@ -41,4 +41,4 @@ def run_many(trials):
 
 
 if __name__ == '__main__':
-    run_many(30000)
+    run_many(10000)
