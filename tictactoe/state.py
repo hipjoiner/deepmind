@@ -96,7 +96,7 @@ class State(metaclass=CachedInstance):
 
     @cached_property
     def fpath(self):
-        return f"{deepmind_home}/tictactoe/states/{''.join([p.symbol for p in self.board])}.json"
+        return f"{deepmind_home}/states/{''.join([p.symbol for p in self.board])}.json"
 
     @cached_property
     def game_over(self):
@@ -152,8 +152,7 @@ class State(metaclass=CachedInstance):
     @property
     def policy_pdf(self):
         if self._policy_pdf is None:
-            # self._policy_pdf = self.policy_pdf_uniform
-            self._policy_pdf = self.policy_pdf_hybrid
+            self._policy_pdf = self.policy_pdf_uniform
         return self._policy_pdf
 
     @policy_pdf.setter
@@ -162,29 +161,13 @@ class State(metaclass=CachedInstance):
 
     @property
     def policy_pdf_greedy(self):
-        """Choice of next play is always whichever one I rate as most valuable at this time.
-        For tictactoe this seems to beat anything I've come up with.
-        I think this makes sense for a deterministic, full information game. The paths in tictactoe are
-        relatively short and straightforward; pursuing whatever worked before seems a highly reliable policy.
-        """
+        """Choice of next play is always whichever one I rate as most valuable at this time."""
         vals = [val[self.who_plays_next.number] for val in self.next_state_values]
         max_val = max(vals)
         greedy_pdf = [1 if val == max_val else 0 for val in vals]
         max_count = sum(greedy_pdf)
         greedy_pdf = [val / max_count for val in greedy_pdf]
         return greedy_pdf
-
-    @property
-    def policy_pdf_hybrid(self):
-        """Explore values that aren't a sure thing. This doesn't come close to greedy either."""
-        vals = [val[self.who_plays_next.number] for val in self.next_state_values]
-        hybrid_pdf = [1 if val == 1 else 0 for val in vals]
-        base = sum(hybrid_pdf)
-        if base == 0:
-            hybrid_pdf = [1 / len(hybrid_pdf) for val in vals]
-        else:
-            hybrid_pdf = [val / base for val in hybrid_pdf]
-        return hybrid_pdf
 
     @cached_property
     def policy_pdf_uniform(self):
@@ -213,9 +196,6 @@ class State(metaclass=CachedInstance):
         self.save_to_cache()
 
     def revise_policy_pdf(self):
-        self.policy_pdf = self.policy_pdf_hybrid
-        return
-
         greedy = self.policy_pdf_greedy
         uniform = self.policy_pdf_uniform
         revised = [
